@@ -1,5 +1,7 @@
 <template>
-  <div class="page" v-if="note">
+  <div class="page">
+    <EmptyState v-if="notFound" description="笔记不存在或尚未发布" action-text="回到首页" @action="$router.push('/')" />
+    <template v-else-if="note">
     <el-page-header @back="$router.back()" content="品鉴详情" />
     <el-row :gutter="16">
       <el-col :xs="24" :md="14">
@@ -20,6 +22,7 @@
             <el-button :type="liked ? 'warning' : 'default'" :loading="liking" @click="toggleLike">
               👍 {{ likeCount }}
             </el-button>
+            <el-button v-if="isOwner" type="primary" plain @click="$router.push(`/note/${note.id}/edit`)">编辑</el-button>
             <el-button v-if="isOwner" type="danger" plain @click="remove">删除</el-button>
           </div>
         </el-card>
@@ -48,6 +51,7 @@
         </el-card>
       </el-col>
     </el-row>
+    </template>
   </div>
 </template>
 
@@ -57,9 +61,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ScoreStars from '@/components/common/ScoreStars.vue'
 import FlavorTags from '@/components/common/FlavorTags.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { getNote, listComments, createComment, likeNote, unlikeNote, deleteNote } from '@/api/note'
 import { getRecipe } from '@/api/recipe'
 import { useAuth } from '@/hooks/useAuth'
+import { useUserStore } from '@/stores/useUserStore'
 import { RoastLevelMap, type TastingNote } from '@/constants/note'
 import type { Comment, BrewRecipe, RecipeStep } from '@/types/api'
 import { formatDateTime } from '@/utils/dateFormat'
@@ -68,6 +74,7 @@ const route = useRoute()
 const router = useRouter()
 const { isLoggedIn, user } = useAuth()
 const note = ref<TastingNote | null>(null)
+const notFound = ref(false)
 const likeCount = ref(0)
 const liked = ref(false)
 const liking = ref(false)
@@ -86,8 +93,26 @@ const steps = computed<RecipeStep[]>(() => {
 const isOwner = computed(() => !!user.value && note.value?.user_id === user.value.id)
 
 onMounted(async () => {
+  await useUserStore().ready
   const id = route.params.id as string
-  const res = await getNote(id)
+  let res
+  try {
+    res = await getNote(id)
+  } catch (e: any) {
+    if (e?.response?.status === 404) {
+      notFound.value = true
+    }
+    return
+  }
+  // Drafts are invisible everywhere except the author's own draft box.
+  if (res.note.status === 'draft') {
+    if (user.value?.id === res.note.user_id) {
+      router.replace(`/note/${res.note.id}/edit`)
+    } else {
+      notFound.value = true
+    }
+    return
+  }
   note.value = res.note
   likeCount.value = res.like_count
   comments.value = await listComments(res.note.id)

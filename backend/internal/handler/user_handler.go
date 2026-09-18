@@ -100,14 +100,20 @@ func (h *UserHandler) Profile(c *gin.Context) {
 	origins, _ := h.noteSvc.TopOrigins(uint(id))
 	followers, following, _ := h.followSvc.Counts(uint(id))
 	likesReceived, _ := h.likeSvc.CountByUserNotes(uint(id))
-	c.JSON(http.StatusOK, dto.OK(gin.H{
-		"user":          u,
-		"note_count":    len(notes),
-		"avg_score":     avg,
-		"top_origins":   origins,
-		"followers":     followers,
-		"following":     following,
+	profile := gin.H{
+		"user":           u,
+		"note_count":     len(notes),
+		"avg_score":      avg,
+		"top_origins":    origins,
+		"followers":      followers,
+		"following":      following,
 		"likes_received": likesReceived,
-		"notes":         notes,
-	}))
+		"notes":          notes,
+	}
+	// Drafts are exposed only inside the author's own draft box.
+	if middleware.GetUserID(c) == uint(id) {
+		drafts, _ := h.noteSvc.ListDraftsByUser(uint(id))
+		profile["drafts"] = drafts
+	}
+	c.JSON(http.StatusOK, dto.OK(profile))
 }

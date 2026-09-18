@@ -3,6 +3,7 @@ package repository
 import (
 	"gorm.io/gorm"
 
+	"github.com/wjecoffeetaste/wjecoffeetaste/internal/constants"
 	"github.com/wjecoffeetaste/wjecoffeetaste/internal/model"
 )
 
@@ -41,7 +42,7 @@ func (r *LikeRepository) CountByUserNotes(userID uint) (int64, error) {
 	var total int64
 	if err := r.db.Model(&model.Like{}).
 		Joins("JOIN tasting_notes ON tasting_notes.id = likes.note_id").
-		Where("tasting_notes.user_id = ?", userID).
+		Where("tasting_notes.user_id = ? AND tasting_notes.status = ?", userID, constants.NoteStatusPublished).
 		Count(&total).Error; err != nil {
 		return 0, err
 	}

@@ -7,6 +7,12 @@ const (
 	RoastDark   = "dark"
 )
 
+// NoteStatus enumerates tasting note publication states.
+const (
+	NoteStatusDraft     = "draft"
+	NoteStatusPublished = "published"
+)
+
 // ValidRoastLevels returns all accepted roast levels.
 func ValidRoastLevels() []string {
 	return []string{RoastLight, RoastMedium, RoastDark}
@@ -20,4 +26,9 @@ func IsValidRoastLevel(s string) bool {
 		}
 	}
 	return false
+}
+
+// IsValidNoteStatus reports whether a note status is known.
+func IsValidNoteStatus(s string) bool {
+	return s == NoteStatusDraft || s == NoteStatusPublished
 }

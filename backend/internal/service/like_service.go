@@ -23,9 +23,13 @@ func NewLikeService(repo *repository.LikeRepository, noteRepo *repository.Tastin
 	return &LikeService{repo: repo, noteRepo: noteRepo, logger: logger}
 }
 
-// Like likes a note (idempotent-friendly: duplicate returns conflict).
+// Like likes a published note (idempotent-friendly: duplicate returns conflict).
 func (s *LikeService) Like(userID, noteID uint) (*model.Like, error) {
-	if _, err := s.noteRepo.FindByID(noteID); err != nil {
+	n, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
+	}
+	if n.Status != constants.NoteStatusPublished {
 		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
 	}
 	l := &model.Like{UserID: userID, NoteID: noteID}

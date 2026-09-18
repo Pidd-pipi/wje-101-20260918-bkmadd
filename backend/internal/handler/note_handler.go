@@ -17,9 +17,9 @@ import (
 
 // NoteHandler exposes tasting note endpoints.
 type NoteHandler struct {
-	svc    *service.NoteService
+	svc     *service.NoteService
 	likeSvc *service.LikeService
-	logger *slog.Logger
+	logger  *slog.Logger
 }
 
 // NewNoteHandler creates a NoteHandler.
@@ -54,6 +54,16 @@ func (h *NoteHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(dto.PageData{List: result, Total: total, Page: page, Size: pageSize}))
 }
 
+// ListMyDrafts handles GET /me/notes/drafts.
+func (h *NoteHandler) ListMyDrafts(c *gin.Context) {
+	items, err := h.svc.ListDraftsByUser(middleware.GetUserID(c))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(items))
+}
+
 // Get handles GET /notes/:id.
 func (h *NoteHandler) Get(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -61,7 +71,7 @@ func (h *NoteHandler) Get(c *gin.Context) {
 		c.Error(util.NewAppError(http.StatusBadRequest, constants.CodeBadRequest, "invalid note id"))
 		return
 	}
-	n, err := h.svc.Get(uint(id))
+	n, err := h.svc.Get(uint(id), middleware.GetUserID(c))
 	if err != nil {
 		c.Error(err)
 		return
@@ -79,9 +89,10 @@ func (h *NoteHandler) Create(c *gin.Context) {
 	}
 	n := &model.TastingNote{
 		CoffeeName: req.CoffeeName, Origin: req.Origin, RoastLevel: req.RoastLevel,
-		FlavorTags: req.FlavorTags, AromaScore: req.AromaScore, AcidityScore: req.AcidityScore,
-		BodyScore: req.BodyScore, OverallScore: req.OverallScore, BrewMethod: req.BrewMethod,
-		BrewRecipeID: req.BrewRecipeID, NotesText: req.NotesText, ImageURL: req.ImageURL,
+		Status: req.Status, FlavorTags: req.FlavorTags, AromaScore: req.AromaScore,
+		AcidityScore: req.AcidityScore, BodyScore: req.BodyScore, OverallScore: req.OverallScore,
+		BrewMethod: req.BrewMethod, BrewRecipeID: req.BrewRecipeID, NotesText: req.NotesText,
+		ImageURL: req.ImageURL,
 	}
 	created, err := h.svc.Create(middleware.GetUserID(c), n)
 	if err != nil {
@@ -105,8 +116,10 @@ func (h *NoteHandler) Update(c *gin.Context) {
 	}
 	n := &model.TastingNote{
 		CoffeeName: req.CoffeeName, Origin: req.Origin, RoastLevel: req.RoastLevel,
-		FlavorTags: req.FlavorTags, AromaScore: req.AromaScore, AcidityScore: req.AcidityScore,
-		BodyScore: req.BodyScore, OverallScore: req.OverallScore, NotesText: req.NotesText,
+		Status: req.Status, FlavorTags: req.FlavorTags, AromaScore: req.AromaScore,
+		AcidityScore: req.AcidityScore, BodyScore: req.BodyScore, OverallScore: req.OverallScore,
+		BrewMethod: req.BrewMethod, BrewRecipeID: req.BrewRecipeID, NotesText: req.NotesText,
+		ImageURL: req.ImageURL,
 	}
 	updated, err := h.svc.Update(middleware.GetUserID(c), uint(id), n)
 	if err != nil {
@@ -114,6 +127,21 @@ func (h *NoteHandler) Update(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, dto.OK(updated))
+}
+
+// Publish handles POST /notes/:id/publish.
+func (h *NoteHandler) Publish(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.Error(util.NewAppError(http.StatusBadRequest, constants.CodeBadRequest, "invalid note id"))
+		return
+	}
+	n, err := h.svc.Publish(middleware.GetUserID(c), uint(id))
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(n))
 }
 
 // Delete handles DELETE /notes/:id.

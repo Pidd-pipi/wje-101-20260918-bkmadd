@@ -11,6 +11,11 @@ export const useUserStore = defineStore('user', () => {
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
 
+  // Resolves once the initial /users/me restore (if any) settles, letting
+  // pages wait for identity before doing owner-only checks.
+  let resolveReady: () => void = () => {}
+  const ready = ref<Promise<void>>(new Promise((r) => { resolveReady = r }))
+
   async function login(username: string, password: string) {
     const res = await apiLogin({ username, password })
     token.value = res.token
@@ -26,8 +31,17 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function fetchProfile() {
-    if (!token.value) return
-    user.value = await getProfile()
+    if (!token.value) {
+      resolveReady()
+      return
+    }
+    try {
+      user.value = await getProfile()
+    } catch {
+      // token may be expired; the request interceptor surfaces the error
+    } finally {
+      resolveReady()
+    }
   }
 
   function logout() {
@@ -36,5 +50,5 @@ export const useUserStore = defineStore('user', () => {
     clearToken()
   }
 
-  return { token, user, isLoggedIn, isAdmin, login, register, fetchProfile, logout }
+  return { token, user, isLoggedIn, isAdmin, ready, login, register, fetchProfile, logout }
 })

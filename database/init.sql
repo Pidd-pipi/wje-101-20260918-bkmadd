@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS tasting_notes (
   coffee_name VARCHAR(128) NOT NULL,
   origin VARCHAR(128),
   roast_level VARCHAR(16) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'published',
   flavor_tags JSONB DEFAULT '[]',
   aroma_score DOUBLE PRECISION DEFAULT 0,
   acidity_score DOUBLE PRECISION DEFAULT 0,

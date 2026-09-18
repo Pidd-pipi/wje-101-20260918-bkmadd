@@ -23,9 +23,13 @@ func NewCommentService(repo *repository.CommentRepository, noteRepo *repository.
 	return &CommentService{repo: repo, noteRepo: noteRepo, logger: logger}
 }
 
-// Create adds a comment to a note.
+// Create adds a comment to a published note.
 func (s *CommentService) Create(userID, noteID uint, content string) (*model.Comment, error) {
-	if _, err := s.noteRepo.FindByID(noteID); err != nil {
+	n, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
+	}
+	if n.Status != constants.NoteStatusPublished {
 		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
 	}
 	c := &model.Comment{NoteID: noteID, UserID: userID, Content: content}
@@ -36,8 +40,15 @@ func (s *CommentService) Create(userID, noteID uint, content string) (*model.Com
 	return c, nil
 }
 
-// ListByNote returns comments of a note.
+// ListByNote returns comments of a published note.
 func (s *CommentService) ListByNote(noteID uint) ([]model.Comment, error) {
+	n, err := s.noteRepo.FindByID(noteID)
+	if err != nil {
+		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
+	}
+	if n.Status != constants.NoteStatusPublished {
+		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
+	}
 	return s.repo.ListByNote(noteID)
 }
 

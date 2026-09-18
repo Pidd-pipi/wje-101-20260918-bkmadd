@@ -9,6 +9,8 @@ type TastingNote struct {
 	CoffeeName    string    `gorm:"size:128;not null" json:"coffee_name"`
 	Origin        string    `gorm:"size:128" json:"origin"`
 	RoastLevel    string    `gorm:"size:16;index;not null" json:"roast_level"`
+	// Status is draft or published. Drafts are only visible to their author.
+	Status        string    `gorm:"size:16;index;not null;default:published" json:"status"`
 	FlavorTags    string    `gorm:"type:json" json:"flavor_tags"`
 	AromaScore    float64   `json:"aroma_score"`
 	AcidityScore  float64   `json:"acidity_score"`

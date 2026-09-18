@@ -119,10 +119,12 @@ wje-101/
 | GET | /api/v1/users/:id/profile | 公开 | 用户主页（含统计） |
 | POST | /api/v1/users/:id/follow | 登录（限流） | 关注用户 |
 | DELETE | /api/v1/users/:id/follow | 登录 | 取消关注 |
-| GET | /api/v1/notes | 公开 | 品鉴笔记列表/筛选 |
-| GET | /api/v1/notes/:id | 公开 | 品鉴笔记详情 |
-| POST | /api/v1/notes | 登录（限流） | 发布品鉴笔记 |
-| PUT | /api/v1/notes/:id | 登录 | 编辑自己的笔记 |
+| GET | /api/v1/notes | 公开 | 已发布笔记列表/筛选（草稿不可见） |
+| GET | /api/v1/notes/:id | 公开 | 笔记详情（草稿仅作者可见，其他人得到 404） |
+| POST | /api/v1/notes | 登录（限流） | 保存笔记：status=draft 存草稿 / status=published 发布 |
+| PUT | /api/v1/notes/:id | 登录 | 编辑自己的笔记（草稿可继续保存；已发布不能退回草稿） |
+| POST | /api/v1/notes/:id/publish | 登录（限流） | 发布自己的草稿（单向，不可撤销） |
+| GET | /api/v1/me/notes/drafts | 登录 | 我的草稿箱 |
 | DELETE | /api/v1/notes/:id | 登录 | 删除自己的笔记 |
 | GET | /api/v1/notes/:id/comments | 公开 | 笔记评论列表 |
 | POST | /api/v1/notes/:id/comments | 登录（限流） | 发表评论 |
@@ -143,6 +145,11 @@ wje-101/
 
 - 后端：`internal/constants/note.go`（定义）、`internal/model/tasting_note.go`（模型）、`internal/service/note_service.go`（校验）、`internal/util/formatters.go`（RoastText）、`internal/constants/log_templates.go`、`database/init.sql`
 - 前端：`src/constants/note.ts`（定义）、`src/pages/Home.vue`（筛选器）、`src/pages/NoteCreate.vue`（表单）、`src/pages/NoteDetail.vue`（详情）、`src/pages/Profile.vue`（品鉴历史）
+
+### NoteStatus（draft/published）
+
+- 后端：`internal/constants/note.go`（定义）、`internal/model/tasting_note.go`（status 列）、`internal/repository/tasting_note_repository.go`（公开列表/统计只查 published）、`internal/service/note_service.go`（保存草稿/发布/单向流转/作者可见性）、`internal/service/comment_service.go`、`internal/service/like_service.go`（草稿不可评论点赞）、`database/init.sql`
+- 前端：`src/constants/note.ts`（定义）、`src/pages/NoteCreate.vue`（保存草稿/发布按钮）、`src/pages/Profile.vue`（草稿箱/已发布标签）、`src/pages/NoteDetail.vue`（草稿对非作者 404）、`src/api/note.ts`
 
 ### ProcessMethod（washed/natural/honey/anaerobic）
 

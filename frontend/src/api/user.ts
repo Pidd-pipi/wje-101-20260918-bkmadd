@@ -13,6 +13,7 @@ export interface ProfileData {
   following: number
   likes_received: number
   notes: TastingNote[]
+  drafts?: TastingNote[]
 }
 
 export function register(payload: { username: string; email: string; password: string; bio?: string }) {

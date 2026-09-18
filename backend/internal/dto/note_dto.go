@@ -1,10 +1,12 @@
 package dto
 
 // NoteCreateRequest creates/updates a tasting note.
+// For draft saves required fields are relaxed in the service layer.
 type NoteCreateRequest struct {
-	CoffeeName   string  `json:"coffee_name" binding:"required,max=128"`
+	CoffeeName   string  `json:"coffee_name" binding:"max=128"`
 	Origin       string  `json:"origin" binding:"omitempty,max=128"`
-	RoastLevel   string  `json:"roast_level" binding:"required"`
+	RoastLevel   string  `json:"roast_level"`
+	Status       string  `json:"status" binding:"omitempty,max=16"`
 	FlavorTags   string  `json:"flavor_tags"`
 	AromaScore   float64 `json:"aroma_score"`
 	AcidityScore float64 `json:"acidity_score"`
