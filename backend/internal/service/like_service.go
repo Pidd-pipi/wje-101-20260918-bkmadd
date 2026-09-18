@@ -25,7 +25,7 @@ func NewLikeService(repo *repository.LikeRepository, noteRepo *repository.Tastin
 
 // Like likes a note (idempotent-friendly: duplicate returns conflict).
 func (s *LikeService) Like(userID, noteID uint) (*model.Like, error) {
-	if _, err := s.noteRepo.FindByID(noteID); err != nil {
+	if _, err := s.noteRepo.FindPublishedByID(noteID); err != nil {
 		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
 	}
 	l := &model.Like{UserID: userID, NoteID: noteID}
@@ -43,6 +43,9 @@ func (s *LikeService) Like(userID, noteID uint) (*model.Like, error) {
 
 // Unlike removes a like.
 func (s *LikeService) Unlike(userID, noteID uint) error {
+	if _, err := s.noteRepo.FindPublishedByID(noteID); err != nil {
+		return util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
+	}
 	l, err := s.repo.Find(userID, noteID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {

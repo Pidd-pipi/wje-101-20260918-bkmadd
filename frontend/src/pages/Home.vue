@@ -24,7 +24,7 @@
           <el-image v-if="item.note.image_url" :src="item.note.image_url" fit="cover" class="cover" lazy />
           <div class="body">
             <h3>{{ item.note.coffee_name }}</h3>
-            <div class="meta">{{ item.note.origin || '-' }} · {{ RoastLevelMap[item.note.roast_level] }} · {{ item.note.brew_method || '-' }}</div>
+            <div class="meta">{{ item.note.origin || '-' }} · {{ RoastLevelMap[item.note.roast_level as RoastLevel] || '未设置' }} · {{ item.note.brew_method || '-' }}</div>
             <ScoreStars :model-value="item.note.overall_score" />
             <FlavorTags :tags="item.note.flavor_tags" />
             <div class="foot">👍 {{ item.like_count }} · {{ formatDate(item.note.created_at) }}</div>
@@ -39,16 +39,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import ScoreStars from '@/components/common/ScoreStars.vue'
 import FlavorTags from '@/components/common/FlavorTags.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useNoteStore } from '@/stores/useNoteStore'
-import { RoastLevelMap } from '@/constants/note'
+import { RoastLevelMap, type RoastLevel } from '@/constants/note'
 import { formatDate } from '@/utils/dateFormat'
 
 const store = useNoteStore()
-const router = useRouter()
 const items = computed(() => store.items)
 const total = computed(() => store.total)
 const page = ref(1)
@@ -63,15 +61,14 @@ onMounted(() => load())
 async function load() {
   loading.value = true
   try {
-    await store.load({ page: page.value, page_size: pageSize, roast: roast.value, sort: sort.value })
+    await store.load({ page: page.value, page_size: pageSize, roast: roast.value, sort: sort.value, keyword: keyword.value })
   } finally {
     loading.value = false
   }
 }
 function doSearch() {
-  if (keyword.value) {
-    router.push({ path: '/beans', query: { keyword: keyword.value } })
-  }
+  page.value = 1
+  load()
 }
 function onPage(p: number) {
   page.value = p

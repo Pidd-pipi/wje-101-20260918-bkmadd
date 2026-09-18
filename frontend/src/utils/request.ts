@@ -25,7 +25,9 @@ request.interceptors.response.use(
     if (status === 401) {
       clearToken()
     }
-    ElMessage.error(msg)
+    if (!err.config?.silent) {
+      ElMessage.error(msg)
+    }
     return Promise.reject(err)
   },
 )

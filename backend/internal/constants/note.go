@@ -21,3 +21,24 @@ func IsValidRoastLevel(s string) bool {
 	}
 	return false
 }
+
+// Note publication status.
+const (
+	NoteStatusDraft     = "draft"
+	NoteStatusPublished = "published"
+)
+
+// ValidNoteStatuses returns all accepted note statuses.
+func ValidNoteStatuses() []string {
+	return []string{NoteStatusDraft, NoteStatusPublished}
+}
+
+// IsValidNoteStatus reports whether a status is known.
+func IsValidNoteStatus(s string) bool {
+	for _, v := range ValidNoteStatuses() {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}

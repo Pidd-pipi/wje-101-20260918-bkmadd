@@ -1,5 +1,10 @@
 export type RoastLevel = 'light' | 'medium' | 'dark'
 
+export type NoteStatus = 'draft' | 'published'
+
+export const NoteStatusDraft: NoteStatus = 'draft'
+export const NoteStatusPublished: NoteStatus = 'published'
+
 export const RoastLevelMap: Record<RoastLevel, string> = {
   light: '浅烘',
   medium: '中烘',
@@ -13,7 +18,7 @@ export interface TastingNote {
   user_id: number
   coffee_name: string
   origin: string
-  roast_level: RoastLevel
+  roast_level: RoastLevel | ''
   flavor_tags: string
   aroma_score: number
   acidity_score: number
@@ -23,6 +28,7 @@ export interface TastingNote {
   brew_recipe_id: number
   notes_text: string
   image_url: string
+  status: NoteStatus
   created_at: string
   updated_at: string
 }

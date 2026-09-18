@@ -9,6 +9,7 @@ const (
 	LogNoteCreateSuccess      = "tasting note created: coffee_name=%s"
 	LogNoteCreateFailed       = "tasting note create failed: coffee_name=%s"
 	LogNoteUpdateSuccess      = "tasting note updated: id=%d"
+	LogNotePublishSuccess     = "tasting note published: id=%d"
 	LogNoteDeleteSuccess      = "tasting note deleted: id=%d"
 	LogNoteListSuccess        = "tasting note list success: roast=%s page=%d"
 	LogNoteLikeSuccess        = "tasting note liked: id=%d"

@@ -18,6 +18,7 @@ type TastingNote struct {
 	BrewRecipeID  uint      `json:"brew_recipe_id"`
 	NotesText     string    `gorm:"type:text" json:"notes_text"`
 	ImageURL      string    `gorm:"size:255" json:"image_url"`
+	Status        string    `gorm:"size:16;not null;default:published;index" json:"status"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }

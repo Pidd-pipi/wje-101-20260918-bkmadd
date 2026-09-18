@@ -3,6 +3,7 @@ package repository
 import (
 	"gorm.io/gorm"
 
+	"github.com/wjecoffeetaste/wjecoffeetaste/internal/constants"
 	"github.com/wjecoffeetaste/wjecoffeetaste/internal/model"
 )
 
@@ -15,10 +16,19 @@ func NewTastingNoteRepository(db *gorm.DB) *TastingNoteRepository { return &Tast
 // Create inserts a note.
 func (r *TastingNoteRepository) Create(n *model.TastingNote) error { return translate(r.db.Create(n).Error) }
 
-// FindByID locates a note by id.
+// FindByID locates a note by id regardless of status (internal use).
 func (r *TastingNoteRepository) FindByID(id uint) (*model.TastingNote, error) {
 	var n model.TastingNote
 	if err := translate(r.db.First(&n, id).Error); err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+// FindPublishedByID locates a published note by id; drafts are treated as not found.
+func (r *TastingNoteRepository) FindPublishedByID(id uint) (*model.TastingNote, error) {
+	var n model.TastingNote
+	if err := translate(r.db.Where("status = ?", constants.NoteStatusPublished).First(&n, id).Error); err != nil {
 		return nil, err
 	}
 	return &n, nil
@@ -39,11 +49,11 @@ func (r *TastingNoteRepository) Delete(id uint) error {
 	return nil
 }
 
-// List filters notes by roast/origin/keyword, ordered by like count or recency.
+// List filters published notes by roast/origin/keyword, ordered by score or recency.
 func (r *TastingNoteRepository) List(roast, origin, keyword string, hot bool, page, pageSize int) ([]model.TastingNote, int64, error) {
 	var items []model.TastingNote
 	var total int64
-	q := r.db.Model(&model.TastingNote{})
+	q := r.db.Model(&model.TastingNote{}).Where("status = ?", constants.NoteStatusPublished)
 	if roast != "" {
 		q = q.Where("roast_level = ?", roast)
 	}
@@ -67,31 +77,40 @@ func (r *TastingNoteRepository) List(roast, origin, keyword string, hot bool, pa
 	return items, total, nil
 }
 
-// ListByUser returns notes of a user.
-func (r *TastingNoteRepository) ListByUser(userID uint) ([]model.TastingNote, error) {
+// ListByUser returns notes of a user filtered by status (empty status means all).
+func (r *TastingNoteRepository) ListByUser(userID uint, status string) ([]model.TastingNote, error) {
 	var items []model.TastingNote
-	if err := r.db.Where("user_id = ?", userID).Order("id DESC").Find(&items).Error; err != nil {
+	q := r.db.Where("user_id = ?", userID)
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if err := q.Order("id DESC").Find(&items).Error; err != nil {
 		return nil, err
 	}
 	return items, nil
 }
 
-// AvgScore returns the average overall score of a user's notes.
+// ListDrafts returns a user's draft notes.
+func (r *TastingNoteRepository) ListDrafts(userID uint) ([]model.TastingNote, error) {
+	return r.ListByUser(userID, constants.NoteStatusDraft)
+}
+
+// AvgScore returns the average overall score of a user's published notes.
 func (r *TastingNoteRepository) AvgScore(userID uint) (float64, error) {
 	var avg float64
 	if err := r.db.Model(&model.TastingNote{}).
-		Where("user_id = ?", userID).
+		Where("user_id = ? AND status = ?", userID, constants.NoteStatusPublished).
 		Select("COALESCE(AVG(overall_score), 0)").Scan(&avg).Error; err != nil {
 		return 0, err
 	}
 	return avg, nil
 }
 
-// TopOrigins returns the top 3 origins by note count for a user.
+// TopOrigins returns the top 3 origins by published note count for a user.
 func (r *TastingNoteRepository) TopOrigins(userID uint) ([]string, error) {
 	var origins []string
 	if err := r.db.Model(&model.TastingNote{}).
-		Where("user_id = ? AND origin <> ''", userID).
+		Where("user_id = ? AND status = ? AND origin <> ''", userID, constants.NoteStatusPublished).
 		Group("origin").Order("count(*) DESC").Limit(3).
 		Pluck("origin", &origins).Error; err != nil {
 		return nil, err

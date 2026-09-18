@@ -21,7 +21,7 @@ export function register(payload: { username: string; email: string; password: s
 export function login(payload: { username: string; password: string }) {
   return request.post<never, LoginResult>('/users/login', payload)
 }
-export function getProfile() { return request.get<never, UserInfo>('/users/me') }
+export function getProfile(silent = false) { return request.get<never, UserInfo>('/users/me', { silent }) }
 export function updateProfile(payload: { bio?: string; avatar?: string }) {
   return request.put<never, UserInfo>('/users/me', payload)
 }

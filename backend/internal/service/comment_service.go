@@ -25,7 +25,7 @@ func NewCommentService(repo *repository.CommentRepository, noteRepo *repository.
 
 // Create adds a comment to a note.
 func (s *CommentService) Create(userID, noteID uint, content string) (*model.Comment, error) {
-	if _, err := s.noteRepo.FindByID(noteID); err != nil {
+	if _, err := s.noteRepo.FindPublishedByID(noteID); err != nil {
 		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
 	}
 	c := &model.Comment{NoteID: noteID, UserID: userID, Content: content}
@@ -36,8 +36,14 @@ func (s *CommentService) Create(userID, noteID uint, content string) (*model.Com
 	return c, nil
 }
 
-// ListByNote returns comments of a note.
+// ListByNote returns comments of a published note.
 func (s *CommentService) ListByNote(noteID uint) ([]model.Comment, error) {
+	if _, err := s.noteRepo.FindPublishedByID(noteID); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", noteID))
+		}
+		return nil, fmt.Errorf("comment list find note: %w", err)
+	}
 	return s.repo.ListByNote(noteID)
 }
 

@@ -95,7 +95,7 @@ func (h *UserHandler) Profile(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	notes, _ := h.noteSvc.ListByUser(uint(id))
+	notes, _ := h.noteSvc.ListByUser(uint(id), constants.NoteStatusPublished)
 	avg, _ := h.noteSvc.AvgScore(uint(id))
 	origins, _ := h.noteSvc.TopOrigins(uint(id))
 	followers, following, _ := h.followSvc.Counts(uint(id))

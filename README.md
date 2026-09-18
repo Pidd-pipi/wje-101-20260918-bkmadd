@@ -17,6 +17,8 @@ docker compose up -d --build
 
 默认账号：`admin / admin123`（管理员）、`barista / user123`（咖啡爱好者）。
 
+草稿与发布：创建页同时提供「保存草稿」与「发布笔记」；草稿持久化在数据库（刷新/重新登录后仍在），仅出现在作者本人的个人主页「草稿箱」标签里，可继续编辑、发布或删除。草稿不会出现在首页、搜索、他人主页，直接访问详情对其他用户返回 404，且不能被评论或点赞；发布为单向操作，已发布笔记不能退回草稿。
+
 关闭并清理：
 
 ```bash
@@ -119,15 +121,17 @@ wje-101/
 | GET | /api/v1/users/:id/profile | 公开 | 用户主页（含统计） |
 | POST | /api/v1/users/:id/follow | 登录（限流） | 关注用户 |
 | DELETE | /api/v1/users/:id/follow | 登录 | 取消关注 |
-| GET | /api/v1/notes | 公开 | 品鉴笔记列表/筛选 |
-| GET | /api/v1/notes/:id | 公开 | 品鉴笔记详情 |
-| POST | /api/v1/notes | 登录（限流） | 发布品鉴笔记 |
-| PUT | /api/v1/notes/:id | 登录 | 编辑自己的笔记 |
-| DELETE | /api/v1/notes/:id | 登录 | 删除自己的笔记 |
-| GET | /api/v1/notes/:id/comments | 公开 | 笔记评论列表 |
-| POST | /api/v1/notes/:id/comments | 登录（限流） | 发表评论 |
+| GET | /api/v1/notes | 公开 | 品鉴笔记列表/筛选（仅返回已发布） |
+| GET | /api/v1/notes/mine?status=draft\|published | 登录 | 我的笔记（草稿箱/已发布） |
+| GET | /api/v1/notes/:id | 公开（作者可看自己的草稿） | 品鉴笔记详情（草稿对他人返回 404） |
+| POST | /api/v1/notes | 登录（限流） | 发布/保存草稿（`status`: draft/published） |
+| PUT | /api/v1/notes/:id | 登录 | 编辑自己的笔记（不改变状态） |
+| POST | /api/v1/notes/:id/publish | 登录 | 发布草稿（发布后不可退回草稿） |
+| DELETE | /api/v1/notes/:id | 登录 | 删除自己的笔记（含草稿） |
+| GET | /api/v1/notes/:id/comments | 公开 | 笔记评论列表（草稿返回 404） |
+| POST | /api/v1/notes/:id/comments | 登录（限流） | 发表评论（草稿不可评论） |
 | DELETE | /api/v1/comments/:id | 登录 | 删除自己的评论 |
-| POST | /api/v1/notes/:id/like | 登录（限流） | 点赞笔记 |
+| POST | /api/v1/notes/:id/like | 登录（限流） | 点赞笔记（草稿不可点赞） |
 | DELETE | /api/v1/notes/:id/like | 登录 | 取消点赞 |
 | GET | /api/v1/recipes | 公开 | 冲煮配方列表/筛选 |
 | GET | /api/v1/recipes/:id | 公开 | 冲煮配方详情 |

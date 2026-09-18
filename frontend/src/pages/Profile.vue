@@ -22,40 +22,135 @@
         {{ following ? '已关注' : '关注' }}
       </el-button>
     </el-card>
-    <h3>品鉴历史</h3>
-    <el-row :gutter="16">
+
+    <div class="history-head">
+      <h3>{{ isOwner ? '我的笔记' : '品鉴历史' }}</h3>
+      <el-radio-group v-if="isOwner" v-model="activeTab" @change="onTabChange">
+        <el-radio-button value="published">已发布</el-radio-button>
+        <el-radio-button value="draft">草稿箱{{ draftCount ? `（${draftCount}）` : '' }}</el-radio-button>
+      </el-radio-group>
+    </div>
+
+    <!-- 已发布 -->
+    <el-row v-if="activeTab === 'published'" :gutter="16">
       <el-col v-for="n in data.notes" :key="n.id" :xs="24" :sm="12" :md="8">
         <el-card class="note-card" shadow="hover" @click="$router.push(`/note/${n.id}`)">
           <h4>{{ n.coffee_name }}</h4>
-          <div class="meta">{{ n.origin }} · {{ RoastLevelMap[n.roast_level] }}</div>
+          <div class="meta">{{ n.origin }} · {{ RoastLevelMap[n.roast_level as RoastLevel] }}</div>
           <ScoreStars :model-value="n.overall_score" />
         </el-card>
       </el-col>
     </el-row>
-    <EmptyState v-if="!data.notes.length" description="暂无品鉴记录" />
+    <EmptyState v-if="activeTab === 'published' && !data.notes.length" description="暂无已发布笔记" />
+
+    <!-- 草稿箱（仅作者本人） -->
+    <template v-if="isOwner && activeTab === 'draft'">
+      <el-row :gutter="16">
+        <el-col v-for="n in drafts" :key="n.id" :xs="24" :sm="12" :md="8">
+          <el-card class="note-card" shadow="hover" @click="$router.push(`/note/${n.id}/edit`)">
+            <el-tag size="small" type="info" class="draft-flag">草稿</el-tag>
+            <h4 class="draft-title">{{ n.coffee_name || '未命名草稿' }}</h4>
+            <div class="meta">{{ formatDate(n.updated_at || n.created_at) }} 更新 · {{ n.notes_text ? n.notes_text.slice(0, 30) : '暂无正文' }}</div>
+            <div class="draft-actions" @click.stop>
+              <el-button size="small" type="primary" :loading="publishingId === n.id" @click="publishDraft(n)">发布</el-button>
+              <el-button size="small" @click="$router.push(`/note/${n.id}/edit`)">继续编辑</el-button>
+              <el-button size="small" type="danger" plain @click="removeDraft(n)">删除</el-button>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+      <EmptyState v-if="!drafts.length" description="草稿箱是空的" action-text="写一篇笔记" @action="$router.push('/note/create')" />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import UserAvatar from '@/components/common/UserAvatar.vue'
 import ScoreStars from '@/components/common/ScoreStars.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { getUserProfile, followUser, unfollowUser } from '@/api/user'
+import { listMyNotes, publishNote, deleteNote } from '@/api/note'
 import { useAuth } from '@/hooks/useAuth'
-import { RoastLevelMap } from '@/constants/note'
+import { useUserStore } from '@/stores/useUserStore'
+import { RoastLevelMap, type RoastLevel, type TastingNote } from '@/constants/note'
 import type { ProfileData } from '@/api/user'
+import { formatDate } from '@/utils/dateFormat'
 
 const route = useRoute()
+const router = useRouter()
 const { isLoggedIn, user } = useAuth()
+const userStore = useUserStore()
 const data = ref<ProfileData | null>(null)
 const following = ref(false)
+const activeTab = ref<'published' | 'draft'>((route.query.tab as string) === 'draft' ? 'draft' : 'published')
+const drafts = ref<TastingNote[]>([])
+const publishingId = ref<number | null>(null)
 
-onMounted(async () => {
+const isOwner = ref(false)
+const draftCount = ref(0)
+
+async function loadProfile() {
+  await userStore.hydrate()
   data.value = await getUserProfile(route.params.id as string)
+  isOwner.value = !!user.value && user.value.id === data.value.user.id
+  if (isOwner.value && (activeTab.value === 'draft' || draftCount.value === 0)) {
+    await loadDrafts()
+  }
+}
+
+async function loadDrafts() {
+  drafts.value = await listMyNotes('draft')
+  draftCount.value = drafts.value.length
+}
+
+onMounted(loadProfile)
+
+watch(() => route.params.id, (id) => {
+  if (id && data.value && String(data.value.user.id) !== String(id)) {
+    activeTab.value = (route.query.tab as string) === 'draft' ? 'draft' : 'published'
+    drafts.value = []
+    draftCount.value = 0
+    loadProfile()
+  }
 })
+
+function onTabChange(tab: string | number) {
+  activeTab.value = tab as 'published' | 'draft'
+  router.replace({ query: { ...route.query, tab: activeTab.value } })
+  if (activeTab.value === 'draft') loadDrafts()
+}
+
+async function publishDraft(n: TastingNote) {
+  if (!n.coffee_name?.trim()) {
+    ElMessage.warning('请先补全咖啡名称再发布')
+    router.push(`/note/${n.id}/edit`)
+    return
+  }
+  if (!RoastLevelMap[n.roast_level as RoastLevel]) {
+    ElMessage.warning('请先选择烘焙度再发布')
+    router.push(`/note/${n.id}/edit`)
+    return
+  }
+  publishingId.value = n.id
+  try {
+    await publishNote(n.id)
+    ElMessage.success('品鉴笔记已发布')
+    await Promise.all([loadDrafts(), loadProfile()])
+  } finally {
+    publishingId.value = null
+  }
+}
+
+async function removeDraft(n: TastingNote) {
+  await ElMessageBox.confirm('确定删除这篇草稿吗？删除后不可恢复。', '提示', { type: 'warning' })
+  await deleteNote(n.id)
+  ElMessage.success('草稿已删除')
+  drafts.value = drafts.value.filter((x) => x.id !== n.id)
+  draftCount.value = drafts.value.length
+}
 
 async function toggleFollow() {
   if (!isLoggedIn.value) {
@@ -85,6 +180,11 @@ async function toggleFollow() {
 .stat span { color: #999; font-size: 12px; }
 .origins { margin: 12px 0; }
 .origin-tag { margin-right: 6px; }
+.history-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.history-head h3 { margin: 0; }
 .note-card { margin-bottom: 16px; cursor: pointer; }
+.draft-title { color: #7b4b2a; }
+.draft-flag { margin-bottom: 6px; }
 .meta { color: #999; font-size: 12px; }
+.draft-actions { margin-top: 10px; display: flex; gap: 8px; cursor: default; }
 </style>

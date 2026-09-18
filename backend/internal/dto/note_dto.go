@@ -1,10 +1,11 @@
 package dto
 
 // NoteCreateRequest creates/updates a tasting note.
+// Drafts may leave coffee_name/roast_level empty; publishing requires them.
 type NoteCreateRequest struct {
-	CoffeeName   string  `json:"coffee_name" binding:"required,max=128"`
+	CoffeeName   string  `json:"coffee_name" binding:"max=128"`
 	Origin       string  `json:"origin" binding:"omitempty,max=128"`
-	RoastLevel   string  `json:"roast_level" binding:"required"`
+	RoastLevel   string  `json:"roast_level"`
 	FlavorTags   string  `json:"flavor_tags"`
 	AromaScore   float64 `json:"aroma_score"`
 	AcidityScore float64 `json:"acidity_score"`
@@ -14,4 +15,5 @@ type NoteCreateRequest struct {
 	BrewRecipeID uint    `json:"brew_recipe_id"`
 	NotesText    string  `json:"notes_text"`
 	ImageURL     string  `json:"image_url" binding:"omitempty,max=255"`
+	Status       string  `json:"status"`
 }

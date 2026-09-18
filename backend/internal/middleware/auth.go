@@ -58,3 +58,16 @@ func GetUserRole(c *gin.Context) string {
 	}
 	return claims.Role
 }
+
+// AuthOptional injects claims when a valid Bearer token is present, but never rejects the request.
+func AuthOptional(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		header := c.GetHeader("Authorization")
+		if strings.HasPrefix(header, "Bearer ") {
+			if claims, err := util.ParseToken(strings.TrimPrefix(header, "Bearer "), cfg.JWTSecret); err == nil {
+				c.Set(UserKey, claims)
+			}
+		}
+		c.Next()
+	}
+}

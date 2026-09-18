@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/wjecoffeetaste/wjecoffeetaste/internal/constants"
 	"github.com/wjecoffeetaste/wjecoffeetaste/internal/model"
@@ -22,27 +23,72 @@ func NewNoteService(repo *repository.TastingNoteRepository, logger *slog.Logger)
 	return &NoteService{repo: repo, logger: logger}
 }
 
-// Create adds a note for a user.
-func (s *NoteService) Create(userID uint, n *model.TastingNote) (*model.TastingNote, error) {
+// validatePublishable ensures a note carries the fields required to go public.
+func validatePublishable(n *model.TastingNote) error {
+	if strings.TrimSpace(n.CoffeeName) == "" {
+		return util.NewAppError(422, constants.CodeValidationError, "coffee_name is required to publish")
+	}
 	if !constants.IsValidRoastLevel(n.RoastLevel) {
-		return nil, util.NewAppError(422, constants.CodeValidationError,
-			fmt.Sprintf("TastingNote[roast_level=%s] create failed: invalid roast level", n.RoastLevel))
+		return util.NewAppError(422, constants.CodeValidationError, "valid roast_level is required to publish")
+	}
+	return nil
+}
+
+// Create adds a draft or published note for a user.
+func (s *NoteService) Create(userID uint, n *model.TastingNote) (*model.TastingNote, error) {
+	if err := s.prepareForCreate(n); err != nil {
+		return nil, err
 	}
 	n.UserID = userID
-	if n.FlavorTags == "" {
-		n.FlavorTags = "[]"
-	}
 	if err := s.repo.Create(n); err != nil {
 		s.logger.Error(fmt.Sprintf(constants.LogNoteCreateFailed, n.CoffeeName), "error", err)
 		return nil, fmt.Errorf("note create: %w", err)
 	}
-	s.logger.Info(fmt.Sprintf(constants.LogNoteCreateSuccess, n.CoffeeName), "id", n.ID)
+	s.logger.Info(fmt.Sprintf(constants.LogNoteCreateSuccess, n.CoffeeName), "id", n.ID, "status", n.Status)
 	return n, nil
 }
 
-// Get returns a note by id.
-func (s *NoteService) Get(id uint) (*model.TastingNote, error) {
+// prepareForCreate normalizes and validates a note before insertion.
+func (s *NoteService) prepareForCreate(n *model.TastingNote) error {
+	if n.Status == "" {
+		n.Status = constants.NoteStatusPublished
+	}
+	if !constants.IsValidNoteStatus(n.Status) {
+		return util.NewAppError(422, constants.CodeValidationError,
+			fmt.Sprintf("TastingNote[status=%s] create failed: invalid status", n.Status))
+	}
+	if n.Status == constants.NoteStatusPublished {
+		if err := validatePublishable(n); err != nil {
+			return err
+		}
+	} else if n.RoastLevel != "" && !constants.IsValidRoastLevel(n.RoastLevel) {
+		return util.NewAppError(422, constants.CodeValidationError, "invalid roast level")
+	}
+	if n.FlavorTags == "" {
+		n.FlavorTags = "[]"
+	}
+	return nil
+}
+
+// GetVisible returns a note visible to viewerID: drafts only for their owner,
+// otherwise drafts are treated as non-existent.
+func (s *NoteService) GetVisible(id, viewerID uint) (*model.TastingNote, error) {
 	n, err := s.repo.FindByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", id))
+		}
+		return nil, fmt.Errorf("note get: %w", err)
+	}
+	if n.Status == constants.NoteStatusDraft && n.UserID != viewerID {
+		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", id))
+	}
+	return n, nil
+}
+
+// Get returns a published note by id; drafts are treated as non-existent.
+func (s *NoteService) Get(id uint) (*model.TastingNote, error) {
+	n, err := s.repo.FindPublishedByID(id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", id))
@@ -52,7 +98,7 @@ func (s *NoteService) Get(id uint) (*model.TastingNote, error) {
 	return n, nil
 }
 
-// Update edits a note owned by the user.
+// Update edits a note owned by the user. Editing never changes status; use Publish to publish a draft.
 func (s *NoteService) Update(userID, id uint, n *model.TastingNote) (*model.TastingNote, error) {
 	exist, err := s.repo.FindByID(id)
 	if err != nil {
@@ -62,34 +108,59 @@ func (s *NoteService) Update(userID, id uint, n *model.TastingNote) (*model.Tast
 		return nil, util.NewAppError(403, constants.CodeForbidden,
 			fmt.Sprintf("TastingNote[id=%d] update failed: user_id=%d not owner", id, userID))
 	}
-	if n.CoffeeName != "" {
-		exist.CoffeeName = n.CoffeeName
+	exist.CoffeeName = n.CoffeeName
+	exist.Origin = n.Origin
+	exist.RoastLevel = n.RoastLevel
+	exist.FlavorTags = n.FlavorTags
+	exist.NotesText = n.NotesText
+	exist.AromaScore = n.AromaScore
+	exist.AcidityScore = n.AcidityScore
+	exist.BodyScore = n.BodyScore
+	exist.OverallScore = n.OverallScore
+	exist.BrewMethod = n.BrewMethod
+	exist.BrewRecipeID = n.BrewRecipeID
+	exist.ImageURL = n.ImageURL
+	if exist.FlavorTags == "" {
+		exist.FlavorTags = "[]"
 	}
-	if n.Origin != "" {
-		exist.Origin = n.Origin
-	}
-	if n.RoastLevel != "" {
-		if !constants.IsValidRoastLevel(n.RoastLevel) {
-			return nil, util.NewAppError(422, constants.CodeValidationError, "invalid roast level")
+	if exist.Status == constants.NoteStatusPublished {
+		if err := validatePublishable(exist); err != nil {
+			return nil, err
 		}
-		exist.RoastLevel = n.RoastLevel
-	}
-	if n.FlavorTags != "" {
-		exist.FlavorTags = n.FlavorTags
-	}
-	if n.NotesText != "" {
-		exist.NotesText = n.NotesText
-	}
-	if n.OverallScore > 0 {
-		exist.AromaScore = n.AromaScore
-		exist.AcidityScore = n.AcidityScore
-		exist.BodyScore = n.BodyScore
-		exist.OverallScore = n.OverallScore
+	} else if exist.RoastLevel != "" && !constants.IsValidRoastLevel(exist.RoastLevel) {
+		return nil, util.NewAppError(422, constants.CodeValidationError, "invalid roast level")
 	}
 	if err := s.repo.Update(exist); err != nil {
 		return nil, fmt.Errorf("note update: %w", err)
 	}
-	s.logger.Info(fmt.Sprintf(constants.LogNoteUpdateSuccess, id), "id", id)
+	s.logger.Info(fmt.Sprintf(constants.LogNoteUpdateSuccess, id), "id", id, "status", exist.Status)
+	return exist, nil
+}
+
+// Publish publishes a draft owned by the user. Published notes stay published (no rollback).
+func (s *NoteService) Publish(userID, id uint) (*model.TastingNote, error) {
+	exist, err := s.repo.FindByID(id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", id))
+		}
+		return nil, fmt.Errorf("note publish find: %w", err)
+	}
+	if exist.UserID != userID {
+		return nil, util.NewAppError(404, constants.CodeNotFound, fmt.Sprintf("TastingNote[id=%d] not found", id))
+	}
+	if exist.Status == constants.NoteStatusPublished {
+		// Publishing is one-way; republishing is a no-op success.
+		return exist, nil
+	}
+	if err := validatePublishable(exist); err != nil {
+		return nil, err
+	}
+	exist.Status = constants.NoteStatusPublished
+	if err := s.repo.Update(exist); err != nil {
+		return nil, fmt.Errorf("note publish: %w", err)
+	}
+	s.logger.Info(fmt.Sprintf(constants.LogNotePublishSuccess, id), "id", id)
 	return exist, nil
 }
 
@@ -110,7 +181,7 @@ func (s *NoteService) Delete(userID, id uint) error {
 	return nil
 }
 
-// List filters notes.
+// List filters published notes.
 func (s *NoteService) List(roast, origin, keyword string, hot bool, page, pageSize int) ([]model.TastingNote, int64, error) {
 	items, total, err := s.repo.List(roast, origin, keyword, hot, page, pageSize)
 	if err != nil {
@@ -120,16 +191,25 @@ func (s *NoteService) List(roast, origin, keyword string, hot bool, page, pageSi
 	return items, total, nil
 }
 
-// ListByUser returns notes of a user.
-func (s *NoteService) ListByUser(userID uint) ([]model.TastingNote, error) {
-	items, err := s.repo.ListByUser(userID)
+// ListByUser returns notes of a user with the given status (empty means all).
+func (s *NoteService) ListByUser(userID uint, status string) ([]model.TastingNote, error) {
+	items, err := s.repo.ListByUser(userID, status)
 	if err != nil {
 		return nil, fmt.Errorf("note list by user: %w", err)
 	}
 	return items, nil
 }
 
-// AvgScore returns the average overall score of a user's notes.
+// ListDrafts returns a user's own draft notes.
+func (s *NoteService) ListDrafts(userID uint) ([]model.TastingNote, error) {
+	items, err := s.repo.ListDrafts(userID)
+	if err != nil {
+		return nil, fmt.Errorf("note list drafts: %w", err)
+	}
+	return items, nil
+}
+
+// AvgScore returns the average overall score of a user's published notes.
 func (s *NoteService) AvgScore(userID uint) (float64, error) {
 	avg, err := s.repo.AvgScore(userID)
 	if err != nil {
@@ -138,7 +218,7 @@ func (s *NoteService) AvgScore(userID uint) (float64, error) {
 	return avg, nil
 }
 
-// TopOrigins returns the top 3 origins by note count.
+// TopOrigins returns the top 3 origins by published note count.
 func (s *NoteService) TopOrigins(userID uint) ([]string, error) {
 	origins, err := s.repo.TopOrigins(userID)
 	if err != nil {

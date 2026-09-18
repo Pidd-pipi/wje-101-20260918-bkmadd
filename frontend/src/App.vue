@@ -18,6 +18,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">我的主页</el-dropdown-item>
+                <el-dropdown-item command="drafts">草稿箱</el-dropdown-item>
                 <el-dropdown-item command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -43,6 +44,8 @@ const router = useRouter()
 function onCommand(cmd: string) {
   if (cmd === 'profile') {
     router.push(`/profile/${user.value?.id}`)
+  } else if (cmd === 'drafts') {
+    router.push(`/profile/${user.value?.id}?tab=draft`)
   } else if (cmd === 'logout') {
     store.logout()
     router.push('/')

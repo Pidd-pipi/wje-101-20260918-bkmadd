@@ -1,12 +1,16 @@
 <template>
-  <div class="page" v-if="note">
+  <div class="page">
     <el-page-header @back="$router.back()" content="品鉴详情" />
-    <el-row :gutter="16">
+    <el-result v-if="loadFailed" icon="warning" title="笔记不存在或尚未发布" sub-title="该笔记可能是作者的草稿，或已被删除。">
+      <template #extra><el-button type="primary" @click="$router.push('/')">返回首页</el-button></template>
+    </el-result>
+    <el-row v-else-if="note" :gutter="16">
       <el-col :xs="24" :md="14">
         <el-card>
+          <el-tag v-if="note.status === 'draft'" type="info" class="draft-tag">草稿 · 仅你可见</el-tag>
           <el-image v-if="note.image_url" :src="note.image_url" fit="cover" class="cover" />
-          <h1>{{ note.coffee_name }}</h1>
-          <div class="meta">{{ note.origin || '-' }} · {{ RoastLevelMap[note.roast_level] }} · {{ note.brew_method || '-' }}</div>
+          <h1>{{ note.coffee_name || '未命名草稿' }}</h1>
+          <div class="meta">{{ note.origin || '-' }} · {{ RoastLevelMap[note.roast_level as RoastLevel] || '未设置' }} · {{ note.brew_method || '-' }}</div>
           <ScoreStars :model-value="note.overall_score" />
           <FlavorTags :tags="note.flavor_tags" />
           <el-descriptions :column="2" border class="scores">
@@ -17,9 +21,10 @@
           </el-descriptions>
           <p class="notes">{{ note.notes_text }}</p>
           <div class="actions">
-            <el-button :type="liked ? 'warning' : 'default'" :loading="liking" @click="toggleLike">
+            <el-button v-if="!isDraft" :type="liked ? 'warning' : 'default'" :loading="liking" @click="toggleLike">
               👍 {{ likeCount }}
             </el-button>
+            <el-button v-if="isOwner" @click="$router.push(`/note/${note.id}/edit`)">编辑</el-button>
             <el-button v-if="isOwner" type="danger" plain @click="remove">删除</el-button>
           </div>
         </el-card>
@@ -33,7 +38,7 @@
           </ol>
         </el-card>
       </el-col>
-      <el-col :xs="24" :md="10">
+      <el-col v-if="!isDraft" :xs="24" :md="10">
         <el-card>
           <template #header>评论（{{ comments.length }}）</template>
           <div v-for="c in comments" :key="c.id" class="comment">
@@ -54,13 +59,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import ScoreStars from '@/components/common/ScoreStars.vue'
 import FlavorTags from '@/components/common/FlavorTags.vue'
 import { getNote, listComments, createComment, likeNote, unlikeNote, deleteNote } from '@/api/note'
 import { getRecipe } from '@/api/recipe'
 import { useAuth } from '@/hooks/useAuth'
-import { RoastLevelMap, type TastingNote } from '@/constants/note'
+import { RoastLevelMap, type RoastLevel, type TastingNote } from '@/constants/note'
 import type { Comment, BrewRecipe, RecipeStep } from '@/types/api'
 import { formatDateTime } from '@/utils/dateFormat'
 
@@ -68,6 +73,7 @@ const route = useRoute()
 const router = useRouter()
 const { isLoggedIn, user } = useAuth()
 const note = ref<TastingNote | null>(null)
+const loadFailed = ref(false)
 const likeCount = ref(0)
 const liked = ref(false)
 const liking = ref(false)
@@ -84,19 +90,26 @@ const steps = computed<RecipeStep[]>(() => {
   }
 })
 const isOwner = computed(() => !!user.value && note.value?.user_id === user.value.id)
+const isDraft = computed(() => note.value?.status === 'draft')
 
 onMounted(async () => {
   const id = route.params.id as string
-  const res = await getNote(id)
-  note.value = res.note
-  likeCount.value = res.like_count
-  comments.value = await listComments(res.note.id)
-  if (res.note.brew_recipe_id) {
-    try {
-      recipe.value = await getRecipe(res.note.brew_recipe_id)
-    } catch {
-      recipe.value = null
+  try {
+    const res = await getNote(id)
+    note.value = res.note
+    likeCount.value = res.like_count
+    if (!isDraft.value) {
+      comments.value = await listComments(res.note.id)
     }
+    if (res.note.brew_recipe_id) {
+      try {
+        recipe.value = await getRecipe(res.note.brew_recipe_id)
+      } catch {
+        recipe.value = null
+      }
+    }
+  } catch {
+    loadFailed.value = true
   }
 })
 
@@ -140,6 +153,7 @@ async function submitReply() {
 }
 
 async function remove() {
+  await ElMessageBox.confirm('确定删除这篇笔记吗？删除后不可恢复。', '提示', { type: 'warning' })
   await deleteNote(note.value!.id)
   ElMessage.success('笔记已删除')
   router.push('/')
@@ -148,6 +162,7 @@ async function remove() {
 
 <style scoped>
 .page { max-width: 1000px; margin: 0 auto; }
+.draft-tag { margin-bottom: 8px; }
 .cover { width: 100%; max-height: 360px; border-radius: 8px; }
 .meta { color: #999; margin: 8px 0; }
 .scores { margin-top: 12px; }

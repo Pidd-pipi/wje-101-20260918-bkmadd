@@ -7,7 +7,7 @@ export const useNoteStore = defineStore('note', () => {
   const items = ref<NoteItem[]>([])
   const total = ref(0)
 
-  async function load(params: { page?: number; page_size?: number; roast?: string; sort?: string } = {}) {
+  async function load(params: { page?: number; page_size?: number; roast?: string; sort?: string; keyword?: string } = {}) {
     const res = await listNotes(params)
     items.value = res.list
     total.value = res.total
